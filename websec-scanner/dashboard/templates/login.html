@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WebSec Scanner — Login</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel-2: #1f2330; --border: #2a2f3d;
+    --text: #e6e8ef; --muted: #8b90a3; --accent: #5b8cff; --crit: #ff4d6d;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); margin: 0;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 32px; width: 100%; max-width: 360px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; text-align: center; }
+  p.sub { color: var(--muted); font-size: 13px; text-align: center; margin: 0 0 24px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 12px; border-radius: 6px; font-size: 14px; margin-bottom: 14px;
+  }
+  button {
+    width: 100%; background: var(--accent); border: none; color: white;
+    padding: 11px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button:hover { opacity: .9; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .error {
+    background: rgba(255,77,109,.1); border: 1px solid rgba(255,77,109,.3); color: var(--crit);
+    padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 14px; display: none;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🛡 WebSec Scanner</h1>
+  <p class="sub">Sign in to continue</p>
+  <div class="error" id="errorBox"></div>
+  <form id="loginForm">
+    <label>Username</label>
+    <input type="text" id="username" autocomplete="username" required />
+    <label>Password</label>
+    <input type="password" id="password" autocomplete="current-password" required />
+    <button type="submit" id="loginBtn">Sign In</button>
+  </form>
+</div>
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  const errBox = document.getElementById('errorBox');
+  errBox.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value
+      })
+    });
+    if (res.ok) {
+      window.location.href = '/';
+    } else {
+      const data = await res.json();
+      errBox.textContent = data.detail || 'Login failed';
+      errBox.style.display = 'block';
+    }
+  } catch (err) {
+    errBox.textContent = 'Could not reach the server.';
+    errBox.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
+});
+</script>
+</body>
+</html>

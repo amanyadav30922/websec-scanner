@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WebSec Scanner</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel-2: #1f2330;
+    --border: #2a2f3d;
+    --text: #e6e8ef;
+    --muted: #8b90a3;
+    --accent: #5b8cff;
+    --crit: #ff4d6d;
+    --high: #ff8a4c;
+    --med: #ffc84c;
+    --low: #4cc9f0;
+    --info: #7d8597;
+    --ok: #4ade80;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); margin: 0; }
+  header {
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .status { font-size: 12px; color: var(--muted); }
+  nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding: 0 32px; }
+  nav button {
+    background: none; border: none; color: var(--muted); padding: 12px 16px;
+    font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 32px 80px; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  .grid { display: grid; grid-template-columns: 320px 1fr; gap: 24px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  .card h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em;}
+  .card h3.sub { font-size: 12px; margin: 14px 0 8px; color: var(--muted); font-weight: 600; }
+  input[type=text], input[type=number], input[type=password], input[type=email] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  label.checkbox { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  label.field { display:block; font-size: 11px; color: var(--muted); margin: 8px 0 2px; }
+  button {
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 9px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  button:hover { opacity: .9; }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: rgba(255,77,109,.15); color: var(--crit); border: 1px solid rgba(255,77,109,.3); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--panel-2);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+  .row-item .name { font-weight: 500; }
+  .row-item .sub { color: var(--muted); font-size: 11px; }
+  .confirmed { color: var(--ok); font-size: 11px; }
+  .unconfirmed { color: var(--med); font-size: 11px; }
+  .row-item .actions button { padding: 4px 8px; font-size: 11px; margin-left: 4px; }
+  .scan-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .scan-row:hover { background: var(--panel-2); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 4px;
+  }
+  .badge.critical { background: rgba(255,77,109,.15); color: var(--crit); }
+  .badge.high { background: rgba(255,138,76,.15); color: var(--high); }
+  .badge.medium { background: rgba(255,200,76,.15); color: var(--med); }
+  .badge.low { background: rgba(76,201,240,.15); color: var(--low); }
+  .badge.info { background: rgba(125,133,151,.15); color: var(--info); }
+  .badge.new { background: rgba(91,140,255,.15); color: var(--accent); }
+  .badge.resolved { background: rgba(76,222,128,.15); color: var(--ok); }
+  .finding {
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: var(--panel-2);
+  }
+  .finding.critical { border-left-color: var(--crit); }
+  .finding.high { border-left-color: var(--high); }
+  .finding.medium { border-left-color: var(--med); }
+  .finding.low { border-left-color: var(--low); }
+  .finding.info { border-left-color: var(--info); }
+  .finding h3 { margin: 0 0 6px; font-size: 14px; }
+  .finding .meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; word-break: break-all; }
+  .finding p { font-size: 13px; line-height: 1.5; margin: 6px 0; color: var(--text); }
+  .finding .remediation {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: rgba(76,222,128,.07);
+    border: 1px solid rgba(76,222,128,.2);
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .finding .remediation strong { color: var(--ok); }
+  .finding .evidence {
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    background: var(--bg);
+    padding: 6px 8px;
+    border-radius: 4px;
+    margin-top: 6px;
+    word-break: break-all;
+  }
+  .finding.resolved-item { opacity: .6; }
+  .empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  .summary-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  #loading { display: none; color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin-right: 8px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .filter-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .filter-tabs button { padding: 6px 12px; font-size: 12px; }
+  select {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 10px; border-radius: 6px; font-size: 13px; margin-bottom: 8px;
+  }
+  .hint { font-size: 11px; color: var(--muted); margin: 4px 0 10px; line-height: 1.5; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛡 WebSec Scanner</h1>
+  <div style="display:flex; align-items:center; gap:16px;">
+    <div class="status" id="nucleiStatus">checking nuclei…</div>
+    <div class="status" id="whoami"></div>
+    <button class="secondary" onclick="logout()" style="padding:6px 12px; font-size:12px;">Log out</button>
+  </div>
+</header>
+
+<nav>
+  <button class="active" data-tab="scan" onclick="switchTab('scan')">Scan</button>
+  <button data-tab="schedules" onclick="switchTab('schedules')">Schedules</button>
+  <button data-tab="alerts" onclick="switchTab('alerts')">Alerts</button>
+  <button data-tab="account" onclick="switchTab('account')">Account</button>
+  <button data-tab="users" id="usersTabBtn" onclick="switchTab('users')" style="display:none;">Users</button>
+</nav>
+
+<div class="wrap">
+
+  <!-- ===== SCAN TAB ===== -->
+  <div class="tab active" id="tab-scan">
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h2>Verified Domains</h2>
+          <input type="text" id="newDomain" placeholder="example.com or https://example.com" />
+          <label class="checkbox">
+            <input type="checkbox" id="confirmOwn" />
+            I own / am authorized to test this domain
+          </label>
+          <button onclick="addDomain()" style="width:100%">Add Domain</button>
+          <div id="domainList" style="margin-top:14px"></div>
+        </div>
+
+        <div class="card">
+          <h2>Scan History</h2>
+          <div id="scanHistory"><div class="empty">No scans yet</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Run Scan</h2>
+          <input type="text" id="scanTarget" placeholder="Select a verified domain, or type one" />
+          <label class="checkbox">
+            <input type="checkbox" id="useNuclei" checked />
+            Include Nuclei template scan (if installed)
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="includeSubdomains" />
+            Also scan discovered subdomains
+          </label>
+          <div style="display:flex; gap:8px;">
+            <button onclick="runScan()" id="scanBtn">Scan Now</button>
+            <button class="secondary" onclick="discoverSubdomains()" id="discoverBtn">Discover Subdomains</button>
+          </div>
+          <div id="subdomainResult" class="hint"></div>
+        </div>
+
+        <div id="loading"><span class="spinner"></span>Scanning… this can take up to a minute.</div>
+
+        <div id="results"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCHEDULES TAB ===== -->
+  <div class="tab" id="tab-schedules">
+    <div class="card">
+      <h2>New Schedule</h2>
+      <input type="text" id="schedTarget" placeholder="Verified domain" />
+      <label class="field">Interval (minutes, min 5)</label>
+      <input type="number" id="schedInterval" value="1440" min="5" />
+      <label class="checkbox"><input type="checkbox" id="schedNuclei" checked /> Include Nuclei scan</label>
+      <label class="checkbox"><input type="checkbox" id="schedSubdomains" /> Include discovered subdomains</label>
+      <button onclick="createSchedule()">Create Schedule</button>
+      <div class="hint">Runs while this app/server process is running. For always-on scheduling even when the app is closed, use system cron to call the scan API instead (see README).</div>
+    </div>
+    <div class="card">
+      <h2>Active Schedules</h2>
+      <div id="scheduleList"><div class="empty">No schedules yet</div></div>
+    </div>
+  </div>
+
+  <!-- ===== ALERTS TAB ===== -->
+  <div class="tab" id="tab-alerts">
+    <div class="card">
+      <h2>Email Alert Settings (SMTP)</h2>
+      <div class="hint">Alerts fire on scan failures and new findings. If left unconfigured, alerts are just logged to the server console instead.</div>
+      <div class="two-col">
+        <div>
+          <label class="field">SMTP Host</label>
+          <input type="text" id="smtpHost" placeholder="smtp.gmail.com" />
+        </div>
+        <div>
+          <label class="field">SMTP Port</label>
+          <input type="number" id="smtpPort" placeholder="587" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div>
+          <label class="field">SMTP Username</label>
+          <input type="text" id="smtpUser" placeholder="you@example.com" />
+        </div>
+        <div>
+          <label class="field">SMTP Password / App Password</label>
+          <input type="password" id="smtpPassword" placeholder="leave blank to keep existing" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div>
+          <label class="field">From Address</label>
+          <input type="email" id="fromAddr" placeholder="alerts@yourapp.com" />
+        </div>
+        <div>
+          <label class="field">To Address</label>
+          <input type="email" id="toAddr" placeholder="you@example.com" />
+        </div>
+      </div>
+      <label class="checkbox"><input type="checkbox" id="useTls" checked /> Use STARTTLS</label>
+
+      <h3 class="sub">Triggers</h3>
+      <label class="checkbox"><input type="checkbox" id="alertFailure" checked /> Alert on scan failures</label>
+      <label class="checkbox"><input type="checkbox" id="alertAnyNew" checked /> Alert on any new finding</label>
+      <label class="checkbox"><input type="checkbox" id="alertCritHigh" checked /> Always call out new critical/high findings distinctly</label>
+
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button onclick="saveAlertConfig()">Save Settings</button>
+        <button class="secondary" onclick="testAlert()">Send Test Alert</button>
+      </div>
+      <div id="alertTestResult" class="hint"></div>
+    </div>
+  </div>
+
+  <!-- ===== ACCOUNT TAB ===== -->
+  <div class="tab" id="tab-account">
+    <div class="card">
+      <h2>Change Password</h2>
+      <div id="currentPwField">
+        <label class="field">Current Password</label>
+        <input type="password" id="currentPassword" />
+      </div>
+      <label class="field">New Password (min 8 characters)</label>
+      <input type="password" id="newPassword" />
+      <button onclick="changePassword()">Update Password</button>
+      <div id="changePwResult" class="hint"></div>
+    </div>
+  </div>
+
+  <!-- ===== USERS TAB (admin only) ===== -->
+  <div class="tab" id="tab-users">
+    <div class="card">
+      <h2>Add User</h2>
+      <div class="two-col">
+        <div>
+          <label class="field">Username</label>
+          <input type="text" id="newUsername" />
+        </div>
+        <div>
+          <label class="field">Password (min 8 characters)</label>
+          <input type="password" id="newUserPassword" />
+        </div>
+      </div>
+      <label class="checkbox"><input type="checkbox" id="newUserIsAdmin" /> Grant admin (can manage users)</label>
+      <button onclick="createUser()">Add User</button>
+      <div id="createUserResult" class="hint"></div>
+    </div>
+    <div class="card">
+      <h2>Users</h2>
+      <div id="userList"><div class="empty">Loading…</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let currentFilter = 'all';
+let currentDiff = null;
+let currentUser = null;
+
+function switchTab(tab) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + tab));
+  if (tab === 'schedules') refreshSchedules();
+  if (tab === 'alerts') loadAlertConfig();
+  if (tab === 'users') refreshUsers();
+}
+
+// ---------- auth ----------
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    window.location.href = '/';
+    throw new Error('Not authenticated');
+  }
+  return res;
+}
+
+async function loadMe() {
+  const res = await fetch('/api/auth/me');
+  if (res.status === 401) { window.location.href = '/'; return; }
+  currentUser = await res.json();
+  document.getElementById('whoami').textContent =
+    `${currentUser.username}${currentUser.is_admin ? ' (admin)' : ''}`;
+  if (currentUser.is_admin) {
+    document.getElementById('usersTabBtn').style.display = '';
+  }
+  document.getElementById('currentPwField').style.display = currentUser.is_admin ? 'none' : 'block';
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', {method: 'POST'});
+  window.location.href = '/';
+}
+
+async function changePassword() {
+  const newPassword = document.getElementById('newPassword').value;
+  const currentPassword = document.getElementById('currentPassword').value;
+  const resEl = document.getElementById('changePwResult');
+  if (newPassword.length < 8) { resEl.textContent = 'New password must be at least 8 characters.'; return; }
+  const res = await fetch('/api/auth/change-password', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({new_password: newPassword, current_password: currentPassword || null})
+  });
+  const data = await res.json();
+  if (res.ok) {
+    resEl.textContent = '✓ Password updated.';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('currentPassword').value = '';
+  } else {
+    resEl.textContent = 'Error: ' + data.detail;
+  }
+}
+
+// ---------- user management ----------
+
+async function createUser() {
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newUserPassword').value;
+  const isAdmin = document.getElementById('newUserIsAdmin').checked;
+  const resEl = document.getElementById('createUserResult');
+  if (!username || password.length < 8) {
+    resEl.textContent = 'Enter a username and a password of at least 8 characters.';
+    return;
+  }
+  const res = await apiFetch('/api/users', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username, password, is_admin: isAdmin})
+  });
+  const data = await res.json();
+  if (res.ok) {
+    resEl.textContent = `✓ User "${username}" created.`;
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newUserPassword').value = '';
+    document.getElementById('newUserIsAdmin').checked = false;
+    refreshUsers();
+  } else {
+    resEl.textContent = 'Error: ' + data.detail;
+  }
+}
+
+async function refreshUsers() {
+  const res = await apiFetch('/api/users');
+  const users = await res.json();
+  const el = document.getElementById('userList');
+  el.innerHTML = users.map(u => `
+    <div class="row-item">
+      <div>
+        <div class="name">${escapeHtml(u.username)}${u.is_admin ? ' <span class="badge info">admin</span>' : ''}</div>
+        <div class="sub">added ${new Date(u.created_at).toLocaleDateString()}</div>
+      </div>
+      <div class="actions">
+        <button class="danger" onclick="deleteUser('${escapeHtml(u.username)}')">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function deleteUser(username) {
+  if (!confirm(`Remove user "${username}"?`)) return;
+  const res = await apiFetch('/api/users/' + encodeURIComponent(username), {method: 'DELETE'});
+  if (!res.ok) {
+    const data = await res.json();
+    alert('Error: ' + data.detail);
+  }
+  refreshUsers();
+}
+
+// ---------- domains ----------
+
+async function refreshDomains() {
+  const res = await fetch('/api/domains');
+  const domains = await res.json();
+  const el = document.getElementById('domainList');
+  if (domains.length === 0) {
+    el.innerHTML = '<div class="empty">No domains added yet</div>';
+    return;
+  }
+  el.innerHTML = domains.map(d => `
+    <div class="row-item">
+      <div>
+        <div class="name">${d.domain}</div>
+        <div class="${d.confirmed ? 'confirmed' : 'unconfirmed'}">
+          ${d.confirmed ? '✓ verified' : '⚠ not confirmed'}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="secondary" onclick="useDomain('${d.domain}')">Use</button>
+        <button class="secondary" onclick="removeDomain('${d.domain}')">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function useDomain(domain) {
+  document.getElementById('scanTarget').value = domain;
+  document.getElementById('schedTarget').value = domain;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+async function addDomain() {
+  const target = document.getElementById('newDomain').value.trim();
+  const confirmed = document.getElementById('confirmOwn').checked;
+  if (!target) return;
+  if (!confirmed) {
+    alert('Please check the confirmation box to verify you own/are authorized to test this domain.');
+    return;
+  }
+  const res = await fetch('/api/domains', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({target, confirmed})
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    alert('Error: ' + err.detail);
+    return;
+  }
+  document.getElementById('newDomain').value = '';
+  document.getElementById('confirmOwn').checked = false;
+  refreshDomains();
+}
+
+async function removeDomain(domain) {
+  await fetch('/api/domains/' + encodeURIComponent(domain), {method: 'DELETE'});
+  refreshDomains();
+}
+
+// ---------- subdomains ----------
+
+async function discoverSubdomains() {
+  const target = document.getElementById('scanTarget').value.trim();
+  if (!target) { alert('Enter a domain first'); return; }
+  const domain = target.replace(/^https?:\/\//, '').split('/')[0];
+  const btn = document.getElementById('discoverBtn');
+  btn.disabled = true;
+  document.getElementById('subdomainResult').textContent = 'Querying certificate transparency logs…';
+  try {
+    const res = await fetch(`/api/domains/${encodeURIComponent(domain)}/discover-subdomains`, {method: 'POST'});
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById('subdomainResult').textContent = 'Error: ' + data.detail;
+      return;
+    }
+    document.getElementById('subdomainResult').textContent =
+      `Found ${data.count} subdomain(s). ${data.discovered.slice(0, 8).join(', ')}${data.count > 8 ? '…' : ''}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------- scanning ----------
+
+async function runScan() {
+  const target = document.getElementById('scanTarget').value.trim();
+  const useNuclei = document.getElementById('useNuclei').checked;
+  const includeSubdomains = document.getElementById('includeSubdomains').checked;
+  if (!target) { alert('Enter a target domain'); return; }
+
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('scanBtn').disabled = true;
+
+  try {
+    const res = await fetch('/api/scan', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({target, use_nuclei: useNuclei, include_subdomains: includeSubdomains})
+    });
+    const data = await res.json();
+    if (data.primary) {
+      renderResult(data.primary);
+      if (data.subdomain_scans && data.subdomain_scans.length) {
+        const extra = data.subdomain_scans.map(s =>
+          `<div class="hint">Also scanned ${escapeHtml(s.target)}: ${
+            Object.values(s.summary||{}).reduce((a,b)=>a+b,0)} issue(s) — see Scan History.</div>`
+        ).join('');
+        document.getElementById('results').insertAdjacentHTML('beforeend', extra);
+      }
+    } else {
+      renderResult(data);
+    }
+    refreshHistory();
+  } catch (e) {
+    document.getElementById('results').innerHTML = `<div class="card">Error: ${e}</div>`;
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('scanBtn').disabled = false;
+  }
+}
+
+function renderResult(data) {
+  currentDiff = data.diff || null;
+  currentFilter = 'all';
+  const el = document.getElementById('results');
+  if (data.status === 'failed') {
+    el.innerHTML = `<div class="card"><h2>Scan Failed</h2><p>${escapeHtml(data.error || '')}</p></div>`;
+    return;
+  }
+  el.innerHTML = buildResultsHtml(data);
+}
+
+function buildResultsHtml(data) {
+  const summary = data.summary || {};
+  const order = ['critical', 'high', 'medium', 'low', 'info'];
+  const summaryHtml = order.map(sev =>
+    summary[sev] ? `<span class="badge ${sev}">${summary[sev]} ${sev}</span>` : ''
+  ).join('');
+
+  const diff = data.diff;
+  let diffBar = '';
+  if (diff && diff.has_baseline) {
+    diffBar = `
+      <div class="filter-tabs">
+        <button class="${currentFilter==='all'?'':'secondary'}" onclick="setFilter('all')">All (${data.findings.length})</button>
+        <button class="${currentFilter==='new'?'':'secondary'}" onclick="setFilter('new')">New (${diff.new.length})</button>
+        <button class="${currentFilter==='persisting'?'':'secondary'}" onclick="setFilter('persisting')">Persisting (${diff.persisting.length})</button>
+        <button class="${currentFilter==='resolved'?'':'secondary'}" onclick="setFilter('resolved')">Resolved (${diff.resolved.length})</button>
+      </div>
+      <div class="hint">Compared against scan from ${new Date(diff.previous_started_at).toLocaleString()}</div>
+    `;
+  } else if (diff && !diff.has_baseline) {
+    diffBar = `<div class="hint">First scan of this target — nothing to diff against yet.</div>`;
+  }
+
+  const findingsHtml = renderFindingsForFilter(data, currentFilter);
+
+  return `
+    <div class="card">
+      <h2>Results for ${escapeHtml(data.target)}</h2>
+      <div class="summary-bar">${summaryHtml || '<span class="badge info">0 issues</span>'}</div>
+      ${diffBar}
+    </div>
+    <div id="findingsContainer">${findingsHtml}</div>
+  `;
+}
+
+function renderFindingsForFilter(data, filter) {
+  const order = ['critical', 'high', 'medium', 'low', 'info'];
+  let list;
+  let resolvedMode = false;
+
+  if (!data.diff || !data.diff.has_baseline || filter === 'all') {
+    list = data.findings || [];
+  } else if (filter === 'new') {
+    list = data.diff.new;
+  } else if (filter === 'persisting') {
+    list = data.diff.persisting;
+  } else if (filter === 'resolved') {
+    list = data.diff.resolved;
+    resolvedMode = true;
+  }
+
+  const sorted = [...list].sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+  if (sorted.length === 0) {
+    return '<div class="empty">Nothing here. 🎉</div>';
+  }
+
+  const newKeys = new Set((data.diff && data.diff.new || []).map(f => f.check + '|' + f.url));
+
+  return sorted.map(f => {
+    const isNew = !resolvedMode && newKeys.has(f.check + '|' + f.url) && data.diff && data.diff.has_baseline;
+    return `
+      <div class="finding ${f.severity} ${resolvedMode ? 'resolved-item' : ''}">
+        <span class="badge ${f.severity}">${f.severity}</span>
+        ${isNew ? '<span class="badge new">new</span>' : ''}
+        ${resolvedMode ? '<span class="badge resolved">resolved</span>' : ''}
+        <h3>${escapeHtml(f.title)}</h3>
+        <div class="meta">${escapeHtml(f.url || '')} &middot; source: ${f.source}</div>
+        <p>${escapeHtml(f.description)}</p>
+        ${f.evidence ? `<div class="evidence">${escapeHtml(f.evidence)}</div>` : ''}
+        <div class="remediation"><strong>Fix:</strong> ${escapeHtml(f.remediation)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function setFilter(filter) {
+  currentFilter = filter;
+  const resultsCard = document.getElementById('results');
+  // re-render fully using the last data we have stored on window
+  if (window.__lastScanData) {
+    resultsCard.innerHTML = buildResultsHtml(window.__lastScanData);
+  }
+}
+
+// wrap renderResult to stash data for filter re-renders
+const _origRenderResult = renderResult;
+renderResult = function(data) {
+  window.__lastScanData = data;
+  _origRenderResult(data);
+};
+
+// ---------- history ----------
+
+async function refreshHistory() {
+  const res = await fetch('/api/scans');
+  const scans = await res.json();
+  const el = document.getElementById('scanHistory');
+  if (scans.length === 0) {
+    el.innerHTML = '<div class="empty">No scans yet</div>';
+    return;
+  }
+  el.innerHTML = scans.slice(0, 15).map(s => {
+    const summary = s.summary || {};
+    const total = Object.values(summary).reduce((a, b) => a + b, 0);
+    return `
+      <div class="scan-row" onclick='loadScan("${s.id}")'>
+        <div>
+          <div>${escapeHtml(s.target)}</div>
+          <div style="color:var(--muted);font-size:11px">${new Date(s.started_at).toLocaleString()}</div>
+        </div>
+        <div>${s.status === 'failed' ? '<span class="badge high">failed</span>' : `<span class="badge info">${total} issues</span>`}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadScan(id) {
+  const res = await fetch('/api/scans/' + id);
+  const data = await res.json();
+  renderResult(data);
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+// ---------- schedules ----------
+
+async function createSchedule() {
+  const target = document.getElementById('schedTarget').value.trim();
+  const interval = parseInt(document.getElementById('schedInterval').value, 10);
+  const useNuclei = document.getElementById('schedNuclei').checked;
+  const includeSubdomains = document.getElementById('schedSubdomains').checked;
+  if (!target) { alert('Enter a domain'); return; }
+
+  const res = await fetch('/api/schedules', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      target, interval_minutes: interval, use_nuclei: useNuclei, include_subdomains: includeSubdomains
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + data.detail); return; }
+  refreshSchedules();
+}
+
+async function refreshSchedules() {
+  const res = await fetch('/api/schedules');
+  const schedules = await res.json();
+  const el = document.getElementById('scheduleList');
+  if (schedules.length === 0) {
+    el.innerHTML = '<div class="empty">No schedules yet</div>';
+    return;
+  }
+  el.innerHTML = schedules.map(s => `
+    <div class="row-item">
+      <div>
+        <div class="name">${escapeHtml(s.target)}</div>
+        <div class="sub">every ${s.interval_minutes} min
+          ${s.use_nuclei ? '· nuclei' : ''}${s.include_subdomains ? ' · +subdomains' : ''}
+          ${s.last_run_at ? ' · last run ' + new Date(s.last_run_at).toLocaleString() : ' · never run yet'}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="secondary" onclick="runScheduleNow('${s.id}')">Run Now</button>
+        <button class="secondary" onclick="toggleSchedule('${s.id}', ${s.enabled ? 'false' : 'true'})">
+          ${s.enabled ? 'Pause' : 'Resume'}
+        </button>
+        <button class="danger" onclick="deleteSchedule('${s.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function toggleSchedule(id, enabled) {
+  await fetch(`/api/schedules/${id}/toggle?enabled=${enabled}`, {method: 'POST'});
+  refreshSchedules();
+}
+
+async function runScheduleNow(id) {
+  await fetch(`/api/schedules/${id}/run-now`, {method: 'POST'});
+  alert('Scan triggered. Check Scan History shortly.');
+  refreshSchedules();
+}
+
+async function deleteSchedule(id) {
+  if (!confirm('Delete this schedule?')) return;
+  await fetch(`/api/schedules/${id}`, {method: 'DELETE'});
+  refreshSchedules();
+}
+
+// ---------- alerts ----------
+
+async function loadAlertConfig() {
+  const res = await fetch('/api/alerts/config');
+  const cfg = await res.json();
+  document.getElementById('smtpHost').value = cfg.smtp_host || '';
+  document.getElementById('smtpPort').value = cfg.smtp_port || 587;
+  document.getElementById('smtpUser').value = cfg.smtp_user || '';
+  document.getElementById('smtpPassword').placeholder = cfg.smtp_password_set ? 'leave blank to keep existing' : 'not set';
+  document.getElementById('fromAddr').value = cfg.from_addr || '';
+  document.getElementById('toAddr').value = cfg.to_addr || '';
+  document.getElementById('useTls').checked = !!cfg.use_tls;
+  document.getElementById('alertFailure').checked = !!cfg.alert_on_scan_failure;
+  document.getElementById('alertAnyNew').checked = !!cfg.alert_on_any_new_finding;
+  document.getElementById('alertCritHigh').checked = !!cfg.alert_on_new_critical_high;
+}
+
+async function saveAlertConfig() {
+  const body = {
+    smtp_host: document.getElementById('smtpHost').value.trim() || null,
+    smtp_port: parseInt(document.getElementById('smtpPort').value, 10) || null,
+    smtp_user: document.getElementById('smtpUser').value.trim() || null,
+    from_addr: document.getElementById('fromAddr').value.trim() || null,
+    to_addr: document.getElementById('toAddr').value.trim() || null,
+    use_tls: document.getElementById('useTls').checked,
+    alert_on_scan_failure: document.getElementById('alertFailure').checked,
+    alert_on_any_new_finding: document.getElementById('alertAnyNew').checked,
+    alert_on_new_critical_high: document.getElementById('alertCritHigh').checked,
+  };
+  const pw = document.getElementById('smtpPassword').value;
+  if (pw) body.smtp_password = pw;
+
+  const res = await fetch('/api/alerts/config', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (res.ok) {
+    alert('Saved.');
+    document.getElementById('smtpPassword').value = '';
+    loadAlertConfig();
+  } else {
+    alert('Error saving settings.');
+  }
+}
+
+async function testAlert() {
+  document.getElementById('alertTestResult').textContent = 'Sending…';
+  const res = await fetch('/api/alerts/test', {method: 'POST'});
+  const data = await res.json();
+  document.getElementById('alertTestResult').textContent =
+    data.sent ? '✓ Test alert sent.' : '⚠ ' + data.detail;
+}
+
+// ---------- misc ----------
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+async function checkStatus() {
+  const res = await fetch('/api/status');
+  const data = await res.json();
+  document.getElementById('nucleiStatus').textContent = data.nuclei_available
+    ? '✓ nuclei installed — CVE/template scanning enabled'
+    : 'ℹ nuclei not installed — passive checks only (see README to add it)';
+}
+
+loadMe();
+refreshDomains();
+refreshHistory();
+checkStatus();
+</script>
+
+</body>
+</html>
